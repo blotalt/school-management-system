@@ -43,4 +43,13 @@ public function isStudent(): bool
 {
     return $this->role === 'student';
 }
+public function student(): HasOne
+{
+    return $this->hasOne(Student::class);
+}
+
+public function teacher(): HasOne
+{
+    return $this->hasOne(Teacher::class);
+}
 }

@@ -1,7 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\TeacherController;
 Route::get('/', function () {
     return view('welcome');
 });
@@ -17,3 +18,7 @@ Route::middleware(['auth', 'role:teacher'])->get('/teacher/dashboard', function 
 Route::middleware(['auth', 'role:student'])->get('/student/dashboard', function () {
     return view('student.dashboard');
 })->name('student.dashboard');
+Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::resource('students', StudentController::class)->except('show');
+    Route::resource('teachers', TeacherController::class)->except('show');
+});
