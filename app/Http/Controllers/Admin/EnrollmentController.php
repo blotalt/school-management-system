@@ -1,50 +1,55 @@
 <?php
 
-namespace App\Http\Controllers\Student;
+namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassSection;
 use App\Models\Enrollment;
+use App\Models\Student;
 use Illuminate\Http\Request;
 
 class EnrollmentController extends Controller
 {
     public function index()
     {
-        $availableClasses = ClassSection::with(['course', 'teacher.user'])->get();
-        $myEnrollments = auth()->user()->student->enrollments()
-            ->with('classSection.course')
-            ->where('status', 'active')
-            ->get();
+        $enrollments = Enrollment::with(['student.user', 'classSection.course'])
+            ->latest()
+            ->paginate(15);
 
-        return view('student.enrollments.index', compact('availableClasses', 'myEnrollments'));
+        return view('admin.enrollments.index', compact('enrollments'));
+    }
+
+    public function create()
+    {
+        $students = Student::with('user')->get();
+        $classes = ClassSection::with('course')->get();
+
+        return view('admin.enrollments.create', compact('students', 'classes'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'student_id' => ['required', 'exists:students,id'],
             'class_id' => ['required', 'exists:classes,id'],
         ]);
 
-        $student = auth()->user()->student;
+        $student = Student::findOrFail($validated['student_id']);
         $class = ClassSection::findOrFail($validated['class_id']);
 
-        // Capacity check
         if (! $class->hasAvailableSeats()) {
-            return back()->with('error', 'This class is full.');
+            return back()->withInput()->with('error', 'This class is full.');
         }
 
-        // Duplicate enrollment check (also enforced by DB unique constraint)
         $alreadyEnrolled = Enrollment::where('student_id', $student->id)
             ->where('class_id', $class->id)
             ->where('status', 'active')
             ->exists();
 
         if ($alreadyEnrolled) {
-            return back()->with('error', 'You are already enrolled in this class.');
+            return back()->withInput()->with('error', 'This student is already enrolled in this class.');
         }
 
-        // Schedule conflict check: same day, overlapping time
         $conflict = $student->enrollments()
             ->where('status', 'active')
             ->whereHas('classSection', function ($query) use ($class) {
@@ -55,7 +60,7 @@ class EnrollmentController extends Controller
             ->exists();
 
         if ($conflict) {
-            return back()->with('error', 'This class overlaps with one you are already enrolled in.');
+            return back()->withInput()->with('error', 'This class overlaps with one the student is already enrolled in.');
         }
 
         Enrollment::create([
@@ -64,16 +69,13 @@ class EnrollmentController extends Controller
             'status' => 'active',
         ]);
 
-        return back()->with('success', 'Enrolled successfully.');
+        return redirect()->route('admin.enrollments.index')->with('success', 'Student enrolled successfully.');
     }
 
     public function destroy(Enrollment $enrollment)
     {
-        // Make sure students can only drop their own enrollment
-        abort_unless($enrollment->student_id === auth()->user()->student->id, 403);
-
         $enrollment->update(['status' => 'dropped']);
 
-        return back()->with('success', 'Dropped the class.');
+        return back()->with('success', 'Enrollment dropped.');
     }
 }
