@@ -22,3 +22,5 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::resource('students', StudentController::class)->except('show');
     Route::resource('teachers', TeacherController::class)->except('show');
 });
+
+Route::get('/preview', fn() => view('admin.dashboard-preview'));
